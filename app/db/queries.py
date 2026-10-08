@@ -197,9 +197,10 @@ def list_customers(conn, limit: int) -> list[dict]:
         "list_customers",
         conn,
         """
-        SELECT c.customer_id, c.name, c.email, c.created_at,
-               (SELECT COUNT(*) FROM COMMERCE.ORDERS o WHERE o.customer_id = c.customer_id) AS order_count
+        SELECT c.customer_id, c.name, c.email, c.created_at, COALESCE(COUNT(o.order_id), 0) AS order_count
         FROM COMMERCE.CUSTOMERS c
+        LEFT JOIN COMMERCE.ORDERS o ON o.customer_id = c.customer_id
+        GROUP BY c.customer_id, c.name, c.email, c.created_at
         ORDER BY c.customer_id
         FETCH FIRST ? ROWS ONLY
         """,
