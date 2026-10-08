@@ -126,7 +126,7 @@ class Db2Pool:
         return conn
 
     def release(self, conn) -> None:
-        if self._idle.qsize() < self.min_size:
+        if self._idle.qsize() < self.max_size:
             self._idle.put(conn)
         else:
             self._close(conn)
