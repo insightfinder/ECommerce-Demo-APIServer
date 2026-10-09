@@ -27,8 +27,8 @@ def list_products(
 def get_product(id: int, pool: Db2Pool = Depends(get_pool)):
     with pool.connection() as conn:
         product = queries.get_product(conn, id)
-        if product is None:
-            raise ApiError(404, "product_not_found", f"product {id} not found", product_id=id)
+    if product is None:
+        raise ApiError(404, "product_not_found", f"product {id} not found", product_id=id)
     return product
 
 
