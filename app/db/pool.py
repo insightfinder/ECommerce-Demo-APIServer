@@ -119,14 +119,16 @@ class Db2Pool:
             raise
         with self._lock:
             self._in_use += 1
-        self._update_gauges()
+            self._update_gauges()
         elapsed = time.perf_counter() - start
         POOL_ACQUIRE_SECONDS.observe(elapsed)
         add_pool_acquire_time(elapsed)
         return conn
 
     def release(self, conn) -> None:
-        if self._idle.qsize() < self.min_size:
+        with self._lock:
+            should_pool = self._idle.qsize() < self.min_size
+        if should_pool:
             self._idle.put(conn)
         else:
             self._close(conn)
@@ -139,7 +141,7 @@ class Db2Pool:
     def _checked_in(self) -> None:
         with self._lock:
             self._in_use -= 1
-        self._update_gauges()
+            self._update_gauges()
         self._sem.release()
 
     @contextmanager
