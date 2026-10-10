@@ -7,8 +7,9 @@ POOL_MAX_SIZE (default 20) misses, the pool is exhausted and *every* DB-backed
 request starts returning 503 db_pool_timeout after POOL_ACQUIRE_TIMEOUT seconds.
 
 The leaks are spread evenly over LEAK_DURATION, so apiserver_db_pool_in_use
-climbs step by step instead of jumping: the first leak is sent at start, the
-last one at LEAK_DURATION, and then Locust exits. The leaked connections stay
+climbs step by step instead of jumping: the first leak is sent LEAK_DELAY
+seconds after start, the last one LEAK_DURATION after that, and then Locust
+exits. The leaked connections stay
 leaked; the apiserver keeps failing until it is restarted.
 
 Unlike the normal locustfile, point this one straight at the apiserver, not the
@@ -21,11 +22,13 @@ the same rate on its own:
 Run the normal locustfile at the same time so there is real traffic to degrade.
 
 The run is bracketed by two InsightFinder change events (deploymentEventReceive):
-one just before the first leak, posing as the code deploy that introduced the
-leak, and one right after the last leak, posing as the ARI action deploying the
+one at start, LEAK_DELAY seconds before the first leak, posing as the code
+deploy that introduced the leak, and one right after the last leak, posing as the ARI action deploying the
 fix. They are only sent when IF_LICENSE_KEY, IF_PROJECT and IF_USER are set.
 
 Knobs (environment variables):
+    LEAK_DELAY     seconds between the deploy change event and the first leak
+                   (default 120, 2 minutes)
     LEAK_DURATION  seconds from the first leak to the last (default 7200, 2 hours)
     LEAK_COUNT     connections to leak; set it to the apiserver's POOL_MAX_SIZE
                    to end with an exhausted pool (default 20)
@@ -52,10 +55,11 @@ import os
 import time
 
 import requests
-from locust import HttpUser, constant_pacing, events, task
+from locust import HttpUser, events, task
 
 log = logging.getLogger("leak")
 
+LEAK_DELAY = float(os.getenv("LEAK_DELAY", "120"))
 LEAK_DURATION = float(os.getenv("LEAK_DURATION", "7200"))
 LEAK_COUNT = int(os.getenv("LEAK_COUNT", "20"))
 MISS_ID_BASE = int(os.getenv("MISS_ID_BASE", "10000000"))
@@ -117,12 +121,20 @@ def on_test_start(environment, **kwargs):
 
 
 class Leaker(HttpUser):
-    # constant_pacing keeps the spacing fixed even when a request is slow.
-    wait_time = constant_pacing(LEAK_INTERVAL)
+    def wait_time(self):
+        # Leak n is due at started + n * LEAK_INTERVAL, so the spacing stays
+        # fixed even when a request is slow. (constant_pacing would count the
+        # LEAK_DELAY sleep in on_start against the first interval.)
+        return max(0.0, self.started + self.sent * LEAK_INTERVAL - time.monotonic())
 
     def on_start(self):
         self.sent = 0
         self.leaked = 0
+        # Leave a gap after the deploy change event (sent on test_start) so the
+        # leak visibly starts after the "deploy". Locust monkey-patches time,
+        # so this sleep yields instead of blocking.
+        log.info("waiting %.0fs after the deploy event before the first leak", LEAK_DELAY)
+        time.sleep(LEAK_DELAY)
         self.started = time.monotonic()
         log.info("leaking %d connections over %.0fs (one every %.1fs)", LEAK_COUNT, LEAK_DURATION, LEAK_INTERVAL)
 
