@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, Response
 from fastapi.responses import JSONResponse
 from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
+from starlette.concurrency import run_in_threadpool
 
 from app.db import queries
 from app.db.errors import DbError
@@ -12,15 +13,20 @@ router = APIRouter(tags=["health"])
 
 
 @router.get("/healthz")
-def healthz():
+async def healthz():
     return {"status": "ok"}
 
 
 @router.get("/readyz")
-def readyz(pool: Db2Pool = Depends(get_pool)):
+async def readyz(pool: Db2Pool = Depends(get_pool)):
+    """Readiness check that verifies database connectivity.
+    
+    Async endpoint that properly yields control to the event loop while
+    acquiring database connections, preventing connection pool exhaustion.
+    """
     try:
-        with pool.connection() as conn:
-            queries.ping(conn)
+        async with pool.async_connection() as conn:
+            await run_in_threadpool(queries.ping, conn)
     except DbError as exc:
         return JSONResponse(
             status_code=503,
@@ -36,5 +42,5 @@ def readyz(pool: Db2Pool = Depends(get_pool)):
 
 
 @router.get("/metrics")
-def metrics():
+async def metrics():
     return Response(generate_latest(), media_type=CONTENT_TYPE_LATEST)

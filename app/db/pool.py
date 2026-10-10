@@ -1,11 +1,13 @@
+import asyncio
 import logging
 import queue
 import threading
 import time
-from contextlib import contextmanager
+from contextlib import asynccontextmanager, contextmanager
 
 import ibm_db
 from prometheus_client import Counter, Gauge, Histogram
+from starlette.concurrency import run_in_threadpool
 
 from app.db.errors import DbError, is_communication_error, parse_db2_error
 from app.logging_setup import add_pool_acquire_time
@@ -156,3 +158,23 @@ class Db2Pool:
                 self.discard(conn)
             else:
                 self.release(conn)
+
+    @asynccontextmanager
+    async def async_connection(self):
+        """Async-safe context manager for acquiring and releasing connections.
+        
+        This version uses run_in_threadpool to avoid blocking the event loop
+        during connection acquisition, which is critical for high-concurrency scenarios.
+        """
+        conn = await run_in_threadpool(self.acquire)
+        broken = False
+        try:
+            yield conn
+        except BaseException as exc:
+            broken = is_communication_error(exc)
+            raise
+        finally:
+            if broken:
+                await run_in_threadpool(self.discard, conn)
+            else:
+                await run_in_threadpool(self.release, conn)
