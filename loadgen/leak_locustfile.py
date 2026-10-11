@@ -29,7 +29,7 @@ fix. They are only sent when IF_LICENSE_KEY, IF_PROJECT and IF_USER are set.
 Knobs (environment variables):
     LEAK_DELAY     seconds between the deploy change event and the first leak
                    (default 120, 2 minutes)
-    LEAK_DURATION  seconds from the first leak to the last (default 7200, 2 hours)
+    LEAK_DURATION  seconds from the first leak to the last (default 1200, 20 minutes)
     LEAK_COUNT     connections to leak; set it to the apiserver's POOL_MAX_SIZE
                    to end with an exhausted pool (default 20)
     MISS_ID_BASE   first product id to request; must be above the real catalog
@@ -60,7 +60,7 @@ from locust import HttpUser, events, task
 log = logging.getLogger("leak")
 
 LEAK_DELAY = float(os.getenv("LEAK_DELAY", "120"))
-LEAK_DURATION = float(os.getenv("LEAK_DURATION", "7200"))
+LEAK_DURATION = float(os.getenv("LEAK_DURATION", "1200"))
 LEAK_COUNT = int(os.getenv("LEAK_COUNT", "20"))
 MISS_ID_BASE = int(os.getenv("MISS_ID_BASE", "10000000"))
 
