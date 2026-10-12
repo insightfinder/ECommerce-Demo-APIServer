@@ -126,21 +126,27 @@ class Db2Pool:
         return conn
 
     def release(self, conn) -> None:
-        if self._idle.qsize() < self.min_size:
-            self._idle.put(conn)
-        else:
-            self._close(conn)
-        self._checked_in()
+        try:
+            if self._idle.qsize() < self.min_size:
+                self._idle.put(conn)
+            else:
+                self._close(conn)
+        finally:
+            self._checked_in()
 
     def discard(self, conn) -> None:
-        self._close(conn)
-        self._checked_in()
+        try:
+            self._close(conn)
+        finally:
+            self._checked_in()
 
     def _checked_in(self) -> None:
-        with self._lock:
-            self._in_use -= 1
-        self._update_gauges()
-        self._sem.release()
+        try:
+            with self._lock:
+                self._in_use -= 1
+            self._update_gauges()
+        finally:
+            self._sem.release()
 
     @contextmanager
     def connection(self):
@@ -152,7 +158,13 @@ class Db2Pool:
             broken = is_communication_error(exc)
             raise
         finally:
-            if broken:
-                self.discard(conn)
-            else:
-                self.release(conn)
+            try:
+                if broken:
+                    self.discard(conn)
+                else:
+                    self.release(conn)
+            except Exception:
+                # If cleanup fails, still try to release the semaphore to avoid pool exhaustion
+                log.error("error during connection cleanup", exc_info=True)
+                self._sem.release()
+                raise

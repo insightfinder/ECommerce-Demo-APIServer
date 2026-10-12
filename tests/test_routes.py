@@ -83,6 +83,25 @@ def test_get_product_not_found(client):
     assert body["request_id"]
 
 
+def test_get_product_not_found_releases_connection(client, fake_db):
+    """Verify that 404 responses properly release the DB connection back to the pool."""
+    # Get initial pool state
+    pool = client.app.state.pool
+    initial_in_use = pool._in_use
+    
+    # Request a non-existent product (triggers 404 and ApiError)
+    resp = client.get("/api/products/999")
+    assert resp.status_code == 404
+    
+    # Verify connection was released (in_use count should be back to initial)
+    assert pool._in_use == initial_in_use, "Connection was not released on 404 path"
+    # Verify semaphore is still available (we should be able to acquire)
+    acquired = pool._sem.acquire(blocking=False)
+    if acquired:
+        pool._sem.release()
+    assert acquired, "Semaphore was not released on 404 path"
+
+
 def test_validation_error_includes_request_id(client):
     resp = client.get("/api/products?limit=0")
     assert resp.status_code == 422
