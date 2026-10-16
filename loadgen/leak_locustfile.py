@@ -29,7 +29,7 @@ fix. They are only sent when IF_LICENSE_KEY, IF_PROJECT and IF_USER are set.
 Knobs (environment variables):
     LEAK_DELAY     seconds between the deploy change event and the first leak
                    (default 120, 2 minutes)
-    LEAK_DURATION  seconds from the first leak to the last (default 3600, 60 minutes)
+    LEAK_DURATION  seconds from the first leak to the last (default 14400, 4 hours)
     LEAK_COUNT     connections to leak; set it to the apiserver's POOL_MAX_SIZE
                    to end with an exhausted pool (default 20)
     MISS_ID_BASE   first product id to request; must be above the real catalog
