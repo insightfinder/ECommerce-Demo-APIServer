@@ -60,7 +60,7 @@ from locust import HttpUser, events, task
 log = logging.getLogger("leak")
 
 LEAK_DELAY = float(os.getenv("LEAK_DELAY", "120"))
-LEAK_DURATION = float(os.getenv("LEAK_DURATION", "3600"))
+LEAK_DURATION = float(os.getenv("LEAK_DURATION", "14400"))
 LEAK_COUNT = int(os.getenv("LEAK_COUNT", "20"))
 MISS_ID_BASE = int(os.getenv("MISS_ID_BASE", "10000000"))
 
