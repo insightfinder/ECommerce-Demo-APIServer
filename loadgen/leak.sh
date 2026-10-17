@@ -29,7 +29,7 @@ LOG_DIR="${LOG_DIR:-$REPO_DIR/loadgen/logs}"                        # one log fi
 
 # Leak profile (read by leak_locustfile.py)
 export LEAK_DELAY="${LEAK_DELAY:-120}"            # seconds from the deploy event to the first leak
-export LEAK_DURATION="${LEAK_DURATION:-14400}"     # seconds from the first leak to the last
+export LEAK_DURATION="${LEAK_DURATION:-10800}"     # seconds from the first leak to the last
 export LEAK_COUNT="${LEAK_COUNT:-${POOL_MAX_SIZE:-20}}" # = POOL_MAX_SIZE ends with an exhausted pool
 export MISS_ID_BASE="${MISS_ID_BASE:-10000000}"   # first product id; must be above the real catalog
 
