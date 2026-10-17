@@ -126,21 +126,34 @@ class Db2Pool:
         return conn
 
     def release(self, conn) -> None:
-        if self._idle.qsize() < self.min_size:
-            self._idle.put(conn)
-        else:
+        try:
+            if self._idle.qsize() < self.min_size:
+                self._idle.put(conn)
+            else:
+                self._close(conn)
+        except Exception:
+            log.warning("error while releasing connection back to pool", exc_info=True)
             self._close(conn)
-        self._checked_in()
+        finally:
+            self._checked_in()
 
     def discard(self, conn) -> None:
-        self._close(conn)
-        self._checked_in()
+        try:
+            self._close(conn)
+        except Exception:
+            log.warning("error while discarding connection", exc_info=True)
+        finally:
+            self._checked_in()
 
     def _checked_in(self) -> None:
-        with self._lock:
-            self._in_use -= 1
-        self._update_gauges()
-        self._sem.release()
+        try:
+            with self._lock:
+                self._in_use -= 1
+            self._update_gauges()
+        except Exception:
+            log.warning("error updating pool state", exc_info=True)
+        finally:
+            self._sem.release()
 
     @contextmanager
     def connection(self):
@@ -149,10 +162,30 @@ class Db2Pool:
         try:
             yield conn
         except BaseException as exc:
-            broken = is_communication_error(exc)
+            try:
+                broken = is_communication_error(exc)
+            except Exception:
+                log.warning("error determining if exception is communication error", exc_info=True)
+                # Assume it's not a communication error if we can't determine
+                broken = False
             raise
         finally:
-            if broken:
-                self.discard(conn)
-            else:
-                self.release(conn)
+            try:
+                if broken:
+                    self.discard(conn)
+                else:
+                    self.release(conn)
+            except Exception:
+                log.error("critical error releasing connection from pool; connection may be leaked", exc_info=True)
+                # Ensure semaphore is released even if release/discard fails
+                try:
+                    self._sem.release()
+                except Exception:
+                    log.error("failed to release semaphore", exc_info=True)
+                    
+                # Ensure in_use is decremented even if release/discard fails
+                try:
+                    with self._lock:
+                        self._in_use -= 1
+                except Exception:
+                    log.error("failed to decrement in_use counter", exc_info=True)

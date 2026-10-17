@@ -60,6 +60,9 @@ def _run(query: str, conn, sql: str, params=(), fetch: bool = True):
     start = time.perf_counter()
     try:
         stmt = ibm_db.prepare(conn, sql)
+        if not stmt:
+            # prepare() returned False, indicating an error
+            raise Exception(f"Failed to prepare statement for query '{query}'")
         ibm_db.execute(stmt, tuple(params))
         if not fetch:
             return ibm_db.num_rows(stmt)
@@ -75,11 +78,13 @@ def _run(query: str, conn, sql: str, params=(), fetch: bool = True):
         elapsed = time.perf_counter() - start
         QUERY_SECONDS.labels(query=query).observe(elapsed)
         add_db_time(elapsed)
-        if stmt:
+        # Always attempt to free the statement to avoid resource leaks
+        # Only free if stmt is not None and not False
+        if stmt and stmt is not False:
             try:
                 ibm_db.free_stmt(stmt)
-            except Exception:
-                pass
+            except Exception as e:
+                log.warning("error freeing statement after query %s", query, exc_info=True)
 
 
 def _timed_call(query: str, conn, fn, *args):
