@@ -231,6 +231,8 @@ def lock_inventory(conn, product_id: int) -> int | None:
 
 
 def get_product_prices(conn, product_ids: list[int]) -> dict[int, Decimal]:
+    if not product_ids:
+        return {}
     rows = _run(
         "get_product_prices",
         conn,
@@ -312,6 +314,8 @@ def list_recent_orders(conn, limit: int) -> list[dict]:
 
 
 def get_order_items(conn, order_ids: list[int]) -> list[dict]:
+    if not order_ids:
+        return []
     return _run(
         "get_order_items",
         conn,
