@@ -33,36 +33,37 @@ def create_order(body: OrderIn, pool: Db2Pool = Depends(get_pool)):
     product_ids = sorted(wanted)
 
     with pool.connection() as conn:
-        queries.begin(conn)
         try:
-            if not queries.customer_exists(conn, body.customer_id):
-                raise ApiError(
-                    404, "customer_not_found", f"customer {body.customer_id} not found", customer_id=body.customer_id
-                )
-
-            shortages = []
-            for pid in product_ids:
-                available = queries.lock_inventory(conn, pid)
-                if available is None:
-                    raise ApiError(404, "product_not_found", f"product {pid} not found", product_id=pid)
-                if available < wanted[pid]:
-                    shortages.append({"product_id": pid, "requested": wanted[pid], "available": available})
-            if shortages:
-                raise ApiError(409, "insufficient_stock", "insufficient stock for one or more items", items=shortages)
-
-            prices = queries.get_product_prices(conn, product_ids)
-            total = sum((prices[pid] * wanted[pid] for pid in product_ids), Decimal("0"))
-            order = queries.insert_order(conn, body.customer_id, "PLACED", total)
-            for pid in product_ids:
-                queries.insert_order_item(conn, order["order_id"], pid, wanted[pid], prices[pid])
-                queries.decrement_inventory(conn, pid, wanted[pid])
-            queries.commit(conn)
-        except BaseException:
+            queries.begin(conn)
             try:
-                queries.rollback(conn)
-            except Exception:
-                pass
-            raise
+                if not queries.customer_exists(conn, body.customer_id):
+                    raise ApiError(
+                        404, "customer_not_found", f"customer {body.customer_id} not found", customer_id=body.customer_id
+                    )
+
+                shortages = []
+                for pid in product_ids:
+                    available = queries.lock_inventory(conn, pid)
+                    if available is None:
+                        raise ApiError(404, "product_not_found", f"product {pid} not found", product_id=pid)
+                    if available < wanted[pid]:
+                        shortages.append({"product_id": pid, "requested": wanted[pid], "available": available})
+                if shortages:
+                    raise ApiError(409, "insufficient_stock", "insufficient stock for one or more items", items=shortages)
+
+                prices = queries.get_product_prices(conn, product_ids)
+                total = sum((prices[pid] * wanted[pid] for pid in product_ids), Decimal("0"))
+                order = queries.insert_order(conn, body.customer_id, "PLACED", total)
+                for pid in product_ids:
+                    queries.insert_order_item(conn, order["order_id"], pid, wanted[pid], prices[pid])
+                    queries.decrement_inventory(conn, pid, wanted[pid])
+                queries.commit(conn)
+            except BaseException:
+                try:
+                    queries.rollback(conn)
+                except Exception:
+                    pass
+                raise
         finally:
             try:
                 queries.end(conn)
