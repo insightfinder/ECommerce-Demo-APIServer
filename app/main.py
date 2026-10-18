@@ -84,7 +84,9 @@ class ObservabilityMiddleware:
             method = scope["method"]
             HTTP_REQUESTS.labels(method=method, route=route_path, status=str(status)).inc()
             HTTP_REQUEST_DURATION.labels(method=method, route=route_path).observe(duration)
-            access_log.info(
+            # 5xx (e.g. 503 from pool/lock timeouts) is logged at ERROR so failures stand out.
+            access_log.log(
+                logging.ERROR if status >= 500 else logging.INFO,
                 "request completed",
                 extra={
                     "method": method,
