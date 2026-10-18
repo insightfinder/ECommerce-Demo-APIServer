@@ -83,6 +83,30 @@ def test_get_product_not_found(client):
     assert body["request_id"]
 
 
+def test_get_product_not_found_does_not_leak_connection(make_client):
+    """Test that 404 on missing product doesn't leak a connection from the pool.
+    
+    This is a regression test for a connection leak where pool.acquire() was called
+    without proper try-finally or context manager, causing connections to accumulate
+    when products weren't found.
+    """
+    client = make_client(pool_max_size=3)
+    pool = client.app.state.pool
+    
+    # Verify initial pool state
+    assert pool._in_use == 0
+    
+    # Make multiple requests for non-existent products
+    for i in range(5):
+        resp = client.get(f"/api/products/{999 + i}")
+        assert resp.status_code == 404
+        # After each request completes, all acquired connections should be released
+        assert pool._in_use == 0, f"Connection leaked after request {i}"
+    
+    # Pool should be able to handle more requests without timeouts
+    assert pool._in_use == 0
+
+
 def test_validation_error_includes_request_id(client):
     resp = client.get("/api/products?limit=0")
     assert resp.status_code == 422
