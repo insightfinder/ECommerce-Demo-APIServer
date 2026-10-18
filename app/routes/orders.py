@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel, Field
 
 from app.db import queries
+from app.db.errors import is_communication_error
 from app.db.pool import Db2Pool
 from app.errors import ApiError
 from app.routes.deps import get_pool
@@ -66,8 +67,10 @@ def create_order(body: OrderIn, pool: Db2Pool = Depends(get_pool)):
         finally:
             try:
                 queries.end(conn)
-            except Exception:
+            except Exception as exc:
                 log.warning("failed to restore autocommit", exc_info=True)
+                if is_communication_error(exc):
+                    raise
 
     log.info("order placed", extra={"order_id": order["order_id"], "customer_id": body.customer_id, "total": float(total)})
     return {
