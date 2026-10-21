@@ -149,10 +149,17 @@ class Db2Pool:
         try:
             yield conn
         except BaseException as exc:
-            broken = is_communication_error(exc)
+            try:
+                broken = is_communication_error(exc)
+            except BaseException:
+                log.warning("error determining if connection is broken", exc_info=True)
+                broken = True
             raise
         finally:
-            if broken:
-                self.discard(conn)
-            else:
-                self.release(conn)
+            try:
+                if broken:
+                    self.discard(conn)
+                else:
+                    self.release(conn)
+            except Exception:
+                log.warning("error during connection cleanup", exc_info=True)
