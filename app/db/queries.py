@@ -79,7 +79,7 @@ def _run(query: str, conn, sql: str, params=(), fetch: bool = True):
             try:
                 ibm_db.free_stmt(stmt)
             except Exception:
-                pass
+                log.warning("error freeing db statement", exc_info=True)
 
 
 def _timed_call(query: str, conn, fn, *args):
