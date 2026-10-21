@@ -64,10 +64,7 @@ def create_order(body: OrderIn, pool: Db2Pool = Depends(get_pool)):
                 pass
             raise
         finally:
-            try:
-                queries.end(conn)
-            except Exception:
-                log.warning("failed to restore autocommit", exc_info=True)
+            queries.end(conn)
 
     log.info("order placed", extra={"order_id": order["order_id"], "customer_id": body.customer_id, "total": float(total)})
     return {
