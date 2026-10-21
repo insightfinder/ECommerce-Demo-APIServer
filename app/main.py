@@ -76,7 +76,7 @@ class ObservabilityMiddleware:
                     content={"error": "internal_error", "message": "internal server error", "request_id": request_id},
                 )
                 await response(scope, receive, send_wrapper)
-            status = 500
+                status = 500
         finally:
             duration = time.perf_counter() - start
             route = scope.get("route")
