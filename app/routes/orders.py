@@ -93,7 +93,10 @@ def list_orders(
             orders = queries.list_orders_for_customer(conn, customer_id, limit)
         else:
             orders = queries.list_recent_orders(conn, limit)
-        items = queries.get_order_items(conn, [o["order_id"] for o in orders]) if orders else []
+        if orders:
+            items = queries.get_order_items(conn, [o["order_id"] for o in orders])
+        else:
+            items = []
 
     by_order: dict[int, list] = {o["order_id"]: [] for o in orders}
     for item in items:
